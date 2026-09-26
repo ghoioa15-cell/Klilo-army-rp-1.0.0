@@ -1,3 +1,111 @@
+--[[
+	Kilo • Army rp — Menu UI (LocalScript)
+	Куда: StarterPlayer > StarterPlayerScripts
+]]
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+local CONFIG = {
+	Title = "Kilo • Army rp",
+	Logo = "rbxassetid://81971415359377",
+	LoadingImage = "rbxassetid://74589703646417",
+	WindowSize = Vector2.new(640, 420),
+	KillSoundId = "rbxassetid://6042053626",
+	InfoCards = {
+		{ Title = "О проекте", Text = "Добро пожаловать в Kilo • Army rp!" },
+		{ Title = "Правила", Text = "1. Уважайте других игроков.\n2. Соблюдайте субординацию.\n3. Выполняйте приказы командования." },
+		{ Title = "Версия", Text = "v1.0.0" },
+	},
+}
+
+local SKYBOXES = {
+	{ name = "Default", ids = nil },
+	{ name = "Space", ids = {
+		Up = "rbxassetid://159454299", Dn = "rbxassetid://159454296",
+		Ft = "rbxassetid://159454293", Bk = "rbxassetid://159454286",
+		Lf = "rbxassetid://159454300", Rt = "rbxassetid://159454288",
+	}},
+}
+
+local C = {
+	Background = Color3.fromRGB(10,10,10), Panel = Color3.fromRGB(18,18,18),
+	Item = Color3.fromRGB(28,28,28), ItemHover = Color3.fromRGB(38,38,38),
+	Stroke = Color3.fromRGB(50,50,50), Text = Color3.fromRGB(255,255,255),
+	SubText = Color3.fromRGB(150,150,150), Accent = Color3.fromRGB(90,160,255),
+	LoadingBg = Color3.fromRGB(8,8,10),
+}
+
+local function create(cls, props, parent)
+	local o = Instance.new(cls)
+	if cls == "TextLabel" or cls == "TextButton" then o.AutoLocalize = false end
+	for k, v in pairs(props) do o[k] = v end
+	o.Parent = parent
+	return o
+end
+
+local function corner(p, r) return create("UICorner", {CornerRadius = UDim.new(0, r)}, p) end
+local function stroke(p, c, t) return create("UIStroke", {Color = c, Thickness = t or 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border}, p) end
+
+local function tween(o, t, props, s, d)
+	local x = TweenService:Create(o, TweenInfo.new(t, s or Enum.EasingStyle.Quad, d or Enum.EasingDirection.Out), props)
+	x:Play() return x
+end
+
+local function iconLine(p, w, h, rot, c)
+	local f = create("Frame", {AnchorPoint = Vector2.new(0.5,0.5), Position = UDim2.fromScale(0.5,0.5), Size = UDim2.fromOffset(w,h), Rotation = rot or 0, BackgroundColor3 = c or C.Text, BorderSizePixel = 0}, p)
+	corner(f, 1) return f
+end
+
+local function makeDraggable(h, target)
+	local drag, ds, sp = false, nil, nil
+	h.InputBegan:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+			drag = true ds = i.Position sp = target.Position
+			i.Changed:Connect(function() if i.UserInputState == Enum.UserInputState.End then drag = false end end)
+		end
+	end)
+	UserInputService.InputChanged:Connect(function(i)
+		if drag and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
+			local d = i.Position - ds
+			target.Position = UDim2.new(sp.X.Scale, sp.X.Offset + d.X, sp.Y.Scale, sp.Y.Offset + d.Y)
+		end
+	end)
+end
+
+local old = playerGui:FindFirstChild("KiloArmyRP_UI") if old then old:Destroy() end
+local oldL = playerGui:FindFirstChild("KiloArmyRP_Loading") if oldL then oldL:Destroy() end
+
+local gui = create("ScreenGui", {Name = "KiloArmyRP_UI", ResetOnSpawn = false, IgnoreGuiInset = true, DisplayOrder = 100, ZIndexBehavior = Enum.ZIndexBehavior.Sibling}, playerGui)
+
+-- WATERMARK
+local watermark = create("Frame", {Name = "Watermark", Position = UDim2.fromOffset(8,8), Size = UDim2.fromOffset(330,22), BackgroundColor3 = C.Background, BackgroundTransparency = 0.15, BorderSizePixel = 0, ZIndex = 50}, gui)
+corner(watermark, 6) stroke(watermark, C.Stroke, 1)
+local wmA = create("Frame", {Size = UDim2.new(0,2,1,-8), Position = UDim2.fromOffset(4,4), BackgroundColor3 = C.Accent, BorderSizePixel = 0}, watermark)
+corner(wmA, 1)
+local wmText = create("TextLabel", {Position = UDim2.fromOffset(12,0), Size = UDim2.new(1,-16,1,0), BackgroundTransparency = 1, Text = CONFIG.Title .. "  |  FPS 60  |  0 ms  |  1 online", TextColor3 = C.Text, Font = Enum.Font.GothamMedium, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Center, TextTruncate = Enum.TextTruncate.AtEnd}, watermark)
+
+local fpsAccum, fpsFrames, currentFps = 0, 0, 60
+RunService.RenderStepped:Connect(function(dt)
+	fpsAccum = fpsAccum + dt fpsFrames = fpsFrames + 1
+	if fpsAccum >= 0.5 then currentFps = math.floor(fpsFrames / fpsAccum + 0.5) fpsAccum = 0 fpsFrames = 0 end
+end)
+task.spawn(function()
+	while watermark.Parent do
+		task.wait(0.5)
+		local ok, p = pcall(function() return math.floor((player:GetNetworkPing() or 0) * 1000 + 0.5) end)
+		if not ok then p = 0 end
+		wmText.Text = string.format("%s  |  FPS %d  |  %d ms  |  %d online", CONFIG.Title, currentFps, p, #Players:GetPlayers())
+	end
+end)
+
 -- WINDOW
 local viewport = Workspace.CurrentCamera and Workspace.CurrentCamera.ViewportSize or Vector2.new(1280, 720)
 local normalSize = UDim2.fromOffset(math.min(CONFIG.WindowSize.X, viewport.X - 24), math.min(CONFIG.WindowSize.Y, viewport.Y - 24))
